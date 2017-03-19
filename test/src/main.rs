@@ -1,10 +1,10 @@
 #![feature(trace_macros)]
 
-#[macro_use] extern crate states;
+#[macro_use] extern crate stateloop;
 #[macro_use] extern crate glium;
 
-use states::app::App;
-use states::state::Action;
+use stateloop::app::App;
+use stateloop::state::Action;
 
 use glium::Surface;
 use glium::glutin::Event;

@@ -5,4 +5,4 @@ authors = ["Samuel Sleight <samuel.sleight@gmail.com>"]
 
 [dependencies]
 glium = "*"
-states = { path = ".." }
+stateloop = { path = ".." }
