@@ -30,7 +30,7 @@ pub enum Action<S> {
 pub trait State<Data>: Copy {
     fn handle_event(self, app: &mut App<Data>, event: Event) -> Action<Self>;
     fn handle_tick(self, app: &mut App<Data>);
-    fn handle_render(self, app: &mut App<Data>);
+    fn handle_render(self, app: &App<Data>);
 }
 
 #[macro_export]
@@ -46,7 +46,7 @@ macro_rules! states {
         $(pub trait $trait {
             fn handle_event(&mut self, event: Event $(, $arg: $t)*) -> $crate::state::Action<$enum>;
             fn handle_tick(&mut self $(, $arg: $t)*);
-            fn handle_render(&mut self $(, $arg: $t)*);
+            fn handle_render(&self $(, $arg: $t)*);
         })+
 
         states! { as_item
@@ -63,7 +63,7 @@ macro_rules! states {
                     }
                 }
 
-                fn handle_render(self, app: &mut $crate::app::App<Data>) {
+                fn handle_render(self, app: &$crate::app::App<Data>) {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_render(app $(, $arg)*),)+
                     }

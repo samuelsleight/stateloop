@@ -26,7 +26,7 @@ impl MainHandler for App<()> {
 
     fn handle_tick(&mut self) {}
 
-    fn handle_render(&mut self) {
+    fn handle_render(&self) {
         let mut target = self.display().draw();
         target.clear_color(0.3, 0.3, 0.3, 1.0);
         target.clear_depth(1.0);
@@ -41,7 +41,7 @@ impl TestHandler for App<()> {
 
     fn handle_tick(&mut self, _: usize) {}
 
-    fn handle_render(&mut self, _: usize) {
+    fn handle_render(&self, _: usize) {
         let mut target = self.display().draw();
         target.clear_color(0.3, 0.3, 0.3, 1.0);
         target.clear_depth(1.0);
@@ -57,5 +57,5 @@ fn main() {
 
         |_| ()
     )
-        .run(State::Test(15))
+        .run(60, State::Test(15))
 }

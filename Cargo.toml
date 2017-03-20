@@ -4,7 +4,7 @@ description = "Simple state-based main loop for doing stuff with glium"
 license = "Apache-2.0"
 name = "stateloop"
 repository = "https://github.com/YeyaSwizaw/stateloop"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies]
 glium = "0.16.0"

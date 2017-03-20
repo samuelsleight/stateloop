@@ -63,11 +63,11 @@ impl<Data> App<Data> {
         Some(state)
     }
 
-    pub fn run<S: State<Data>>(&mut self, mut state: S) {
+    pub fn run<S: State<Data>>(&mut self, fps: u32, mut state: S) {
         let mut accum = Duration::from_millis(0);
         let mut prev = Instant::now();
 
-        let spf = Duration::from_millis(33);
+        let spf = Duration::from_millis((1000.0 / fps as f64) as u64);
 
         while let Some(next) = self.handle_events(state) {
             state = next;
