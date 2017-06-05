@@ -1,13 +1,13 @@
 #![feature(trace_macros)]
 
 #[macro_use] extern crate stateloop;
-#[macro_use] extern crate glium;
+extern crate vulkano;
+extern crate vulkano_win;
 
-use stateloop::app::App;
+use stateloop::app::{App, Data, Event};
 use stateloop::state::Action;
 
-use glium::Surface;
-use glium::glutin::Event;
+use vulkano::instance::Instance;
 
 states! {
     State {
@@ -16,7 +16,11 @@ states! {
     }
 }
 
-impl MainHandler for App<()> {
+struct Renderer {
+
+}
+
+impl MainHandler for Data<()> {
     fn handle_event(&mut self, event: Event) -> Action<State> {
         match event {
             Event::Closed => Action::Quit,
@@ -27,14 +31,10 @@ impl MainHandler for App<()> {
     fn handle_tick(&mut self) {}
 
     fn handle_render(&self) {
-        let mut target = self.display().draw();
-        target.clear_color(0.3, 0.3, 0.3, 1.0);
-        target.clear_depth(1.0);
-        target.finish().unwrap();
     }
 }
 
-impl TestHandler for App<()> {
+impl TestHandler for Data<()> {
     fn handle_event(&mut self, _: Event, _: usize) -> Action<State> {
         Action::Done(State::Main())
     }
@@ -42,20 +42,26 @@ impl TestHandler for App<()> {
     fn handle_tick(&mut self, _: usize) {}
 
     fn handle_render(&self, _: usize) {
-        let mut target = self.display().draw();
-        target.clear_color(0.3, 0.3, 0.3, 1.0);
-        target.clear_depth(1.0);
-        target.finish().unwrap();
     }
 }
 
 fn main() {
+    let instance = {
+        let extensions = vulkano_win::required_extensions();
+
+        Instance::new(None, &extensions, None)
+            .unwrap()
+    };
+
     App::new(
+        instance,
+
         |builder| builder
             .with_title("States Test")
             .with_dimensions(500, 500),
 
         |_| ()
     )
+        .unwrap()
         .run(60, State::Test(15))
 }

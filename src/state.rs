@@ -16,9 +16,7 @@
 //  limitations under the License.
 //////////////////////////////////////////////////////////////////////////////
 
-use app::App;
-
-use glium::glutin::Event;
+use app::{Data, Event};
 
 #[derive(Copy, Clone)]
 pub enum Action<S> {
@@ -27,10 +25,10 @@ pub enum Action<S> {
     Quit,
 }
 
-pub trait State<Data>: Copy {
-    fn handle_event(self, app: &mut App<Data>, event: Event) -> Action<Self>;
-    fn handle_tick(self, app: &mut App<Data>);
-    fn handle_render(self, app: &App<Data>);
+pub trait State<D>: Copy {
+    fn handle_event(self, app: &mut Data<D>, event: Event) -> Action<Self>;
+    fn handle_tick(self, app: &mut Data<D>);
+    fn handle_render(self, app: &Data<D>);
 }
 
 #[macro_export]
@@ -50,20 +48,20 @@ macro_rules! states {
         })+
 
         states! { as_item
-            impl<Data> $crate::state::State<Data> for $enum where $crate::app::App<Data>: $($trait +)+ Sized {
-                fn handle_event(self, app: &mut $crate::app::App<Data>, event: Event) -> $crate::state::Action<$enum> {
+            impl<D> $crate::state::State<D> for $enum where $crate::app::Data<D>: $($trait +)+ Sized {
+                fn handle_event(self, app: &mut $crate::app::Data<D>, event: Event) -> $crate::state::Action<$enum> {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_event(app, event $(, $arg)*),)+
                     }
                 }
 
-                fn handle_tick(self, app: &mut $crate::app::App<Data>) {
+                fn handle_tick(self, app: &mut $crate::app::Data<D>) {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_tick(app $(, $arg)*),)+
                     }
                 }
 
-                fn handle_render(self, app: &$crate::app::App<Data>) {
+                fn handle_render(self, app: &$crate::app::Data<D>) {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_render(app $(, $arg)*),)+
                     }

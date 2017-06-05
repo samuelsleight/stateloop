@@ -17,53 +17,91 @@
 //////////////////////////////////////////////////////////////////////////////
 
 use std::time::{Duration, Instant};
+use std::sync::Arc;
 use std::thread::sleep;
 
-use glium::DisplayBuild;
-use glium::glutin::{WindowBuilder};
-use glium::backend::glutin_backend::GlutinFacade;
+use vulkano::instance::Instance;
+use vulkano_win::VkSurfaceBuild;
+use winit::EventsLoop;
+
+use winit::Event as WinitEvent;
+
+pub use vulkano::instance::InstanceCreationError;
+pub use vulkano_win::{Window, CreationError};
+pub use winit::WindowBuilder;
+
+pub use winit::WindowEvent as Event;
 
 use state::{Action, State};
 
-pub struct App<Data> {
-    display: GlutinFacade,
-    data: Data
+pub struct App<D> {
+    event_loop: EventsLoop,
+    data: Data<D>
 }
 
-impl<Data> App<Data> {
-    pub fn new<WindowInit, DataInit>(f: WindowInit, g: DataInit) -> App<Data> 
+pub struct Data<D> {
+    window: Window,
+    data: D
+}
+
+#[derive(Debug)]
+pub enum Error {
+    WindowCreation(CreationError),
+    InstanceCreation(InstanceCreationError)
+}
+
+impl<D> App<D> {
+    pub fn new<WindowInit, DataInit>(instance: Arc<Instance>, f: WindowInit, g: DataInit) -> Result<App<D>, Error>
         where 
             WindowInit: FnOnce(WindowBuilder) -> WindowBuilder,
-            DataInit: FnOnce(&GlutinFacade) -> Data {
+            DataInit: FnOnce(&Window) -> D {
 
-        let display = f(WindowBuilder::new()).build_glium().unwrap();
-        let data = g(&display);
+        let event_loop = EventsLoop::new();
+        let window = f(WindowBuilder::new())
+            .build_vk_surface(&event_loop, instance)
+            .map_err(Error::WindowCreation)?;
 
-        App {
-            display: display,
-            data: data
-        }
+        let data = g(&window);
+
+        Ok(App {
+            event_loop: event_loop,
+            data: Data {
+                window: window,
+                data: data
+            }
+        })
     }
 
-    fn handle_events<S: State<Data>>(&mut self, mut state: S) -> Option<S> {
-        loop {
-            let event = if let Some(event) = self.display.poll_events().next() {
-                event
-            } else {
-                break
-            };
+    fn handle_events<S: State<D>>(&mut self, mut state: S) -> Option<S> {
+        let mut quit = false;
 
-            state = match state.handle_event(self, event.clone()) {
+        let event_loop = &self.event_loop;
+        let data = &mut self.data;
+
+        event_loop.poll_events(|e| {
+            let WinitEvent::WindowEvent {
+                window_id: _,
+                event,
+            } = e;
+
+            state = match state.handle_event(data, event) {
                 Action::Continue => state,
                 Action::Done(state) => state,
-                Action::Quit => return None,
+                Action::Quit => {
+                    quit = true;
+                    state
+                }
             }
-        }
+        });
 
-        Some(state)
+        if quit {
+            None
+        } else {
+            Some(state)
+        }
     }
 
-    pub fn run<S: State<Data>>(&mut self, fps: u32, mut state: S) {
+    pub fn run<S: State<D>>(&mut self, fps: u32, mut state: S) {
         let mut accum = Duration::from_millis(0);
         let mut prev = Instant::now();
 
@@ -71,7 +109,7 @@ impl<Data> App<Data> {
 
         while let Some(next) = self.handle_events(state) {
             state = next;
-            state.handle_render(self);
+            state.handle_render(&mut self.data);
 
             let now = Instant::now();
             accum += now - prev;
@@ -80,23 +118,29 @@ impl<Data> App<Data> {
             while accum >= spf {
                 accum -= spf;
 
-                state.handle_tick(self);
+                state.handle_tick(&mut self.data);
             }
 
             sleep(spf - accum);
         }
     }
 
-    pub fn data(&self) -> &Data {
+    pub fn data(&self) -> &Data<D> {
+        &self.data
+    }
+}
+
+impl<D> Data<D> {
+    pub fn data(&self) -> &D {
         &self.data
     }
 
-    pub fn data_mut(&mut self) -> &mut Data {
+    pub fn data_mut(&mut self) -> &mut D {
         &mut self.data
     }
 
-    pub fn display(&self) -> &GlutinFacade {
-        &self.display
+    pub fn window(&self) -> &Window {
+        &self.window
     }
 }
 
