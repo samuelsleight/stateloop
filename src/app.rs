@@ -128,6 +128,7 @@ impl<D> App<D> {
     pub fn data(&self) -> &Data<D> {
         &self.data
     }
+
 }
 
 impl<D> Data<D> {

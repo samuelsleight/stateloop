@@ -14,6 +14,7 @@ winit = "0.6.4"
 [replace]
 "vulkano:0.4.0" = { path = "../vulkano/vulkano" }
 "vulkano-win:0.4.0" = { path = "../vulkano/vulkano-win" }
+"vulkano-shader-derive:0.4.0" = { path = "../vulkano/vulkano-shader-derive" }
 
 [workspace]
 members = ["test"]
