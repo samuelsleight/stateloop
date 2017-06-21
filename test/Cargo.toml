@@ -5,11 +5,6 @@ authors = ["Samuel Sleight <samuel.sleight@gmail.com>"]
 
 [dependencies]
 stateloop = { path = ".." }
-vulkano = "0.4.0"
-vulkano-win = "0.4.0"
-vulkano-shader-derive = "0.4.0"
-
-[replace]
-"vulkano:0.4.0" = { path = "../vulkano/vulkano" }
-"vulkano-win:0.4.0" = { path = "../vulkano/vulkano-win" }
-"vulkano-shader-derive:0.4.0" = { path = "../vulkano/vulkano-shader-derive" }
+vulkano = { git = "https://github.com/tomaka/vulkano" }
+vulkano-win = { git = "https://github.com/tomaka/vulkano" }
+vulkano-shader-derive = { git = "https://github.com/tomaka/vulkano" }
