@@ -1,28 +1,31 @@
-#![feature(trace_macros)]
-
 #[macro_use] extern crate stateloop;
 #[macro_use] extern crate vulkano;
 #[macro_use] extern crate vulkano_shader_derive;
 extern crate vulkano_win;
 
-use std::{ptr, mem};
-use std::rc::Rc;
-use std::sync::Arc;
-use std::cell::{Cell, RefCell, UnsafeCell};
+use std::{
+    ptr, mem,
+    sync::Arc,
+    cell::{RefCell, UnsafeCell},
+};
 
-use stateloop::app::{App, Data, Event, Window, WindowBuilder};
-use stateloop::state::Action;
+use stateloop::{
+    state::Action,
+    app::{App, Data, Event, Window, WindowBuilder},
+};
 
-use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState};
-use vulkano::device::{Device, DeviceExtensions, Queue};
-use vulkano::framebuffer::{Framebuffer, Subpass, FramebufferAbstract, RenderPassAbstract};
-use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::image::SwapchainImage;
-use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
-use vulkano::pipeline::viewport::Viewport;
-use vulkano::swapchain::{self, PresentMode, SurfaceTransform, Surface, Swapchain,AcquireError, SwapchainCreationError};
-use vulkano::sync::{now, GpuFuture, FlushError};
+use vulkano::{
+    buffer::{BufferUsage, CpuAccessibleBuffer},
+    command_buffer::{AutoCommandBufferBuilder, DynamicState},
+    device::{Device, DeviceExtensions, Queue},
+    framebuffer::{Framebuffer, Subpass, FramebufferAbstract, RenderPassAbstract},
+    instance::{Instance, PhysicalDevice},
+    image::SwapchainImage,
+    pipeline::{GraphicsPipeline, GraphicsPipelineAbstract},
+    pipeline::viewport::Viewport,
+    swapchain::{self, PresentMode, SurfaceTransform, Surface, Swapchain,AcquireError, SwapchainCreationError},
+    sync::{now, GpuFuture, FlushError},
+};
 
 use vulkano_win::VkSurfaceBuild;
 
@@ -171,7 +174,7 @@ impl MainHandler for Data<Renderer, Arc<Surface<Window>>> {
                     renderer.recreate_swapchain = true;
                     Box::new(now(renderer.device.clone())) as Box<_>
                 },
-                Err(e) => Box::new(now(renderer.device.clone())) as Box<_>
+                Err(_) => Box::new(now(renderer.device.clone())) as Box<_>
             };
 
             unsafe {
@@ -230,7 +233,7 @@ fn init_vulkan(instance: Arc<Instance>, window: &Arc<Surface<Window>>) -> Render
 
     let queue = queues.next().unwrap();
 
-    let mut dimensions;
+    let dimensions;
 
     // Create swapchain
     let (swapchain, images) = {
@@ -276,6 +279,7 @@ fn init_vulkan(instance: Arc<Instance>, window: &Arc<Surface<Window>>) -> Render
 
     // Create shaders
     mod vs {
+        #[allow(dead_code)]
         #[derive(VulkanoShader)]
         #[ty = "vertex"]
         #[src = "
@@ -291,6 +295,7 @@ void main() {
     }
 
     mod fs {
+        #[allow(dead_code)]
         #[derive(VulkanoShader)]
         #[ty = "fragment"]
         #[path = "shader.glsl"]
@@ -327,15 +332,6 @@ void main() {
         .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
         .build(device.clone())
         .unwrap());
-
-    /*
-    // Create framebuffers
-    let framebuffers = images.iter().map(|image| {
-        Arc::new(Framebuffer::start(render_pass.clone())
-            .add(image.clone()).unwrap()
-            .build().unwrap()) as Arc<FramebufferAbstract + Send + Sync>
-    }).collect();
-    */
 
     Renderer {
         data: RefCell::new(RendererData {
