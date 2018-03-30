@@ -25,10 +25,10 @@ pub enum Action<S> {
     Quit,
 }
 
-pub trait State<D>: Copy {
-    fn handle_event(self, app: &mut Data<D>, event: Event) -> Action<Self>;
-    fn handle_tick(self, app: &mut Data<D>);
-    fn handle_render(self, app: &Data<D>);
+pub trait State<D, W> : Copy {
+    fn handle_event(self, app: &mut Data<D, W>, event: Event) -> Action<Self>;
+    fn handle_tick(self, app: &mut Data<D, W>);
+    fn handle_render(self, app: &Data<D, W>);
 }
 
 #[macro_export]
@@ -48,20 +48,20 @@ macro_rules! states {
         })+
 
         states! { as_item
-            impl<D> $crate::state::State<D> for $enum where $crate::app::Data<D>: $($trait +)+ Sized {
-                fn handle_event(self, app: &mut $crate::app::Data<D>, event: Event) -> $crate::state::Action<$enum> {
+            impl<D, W> $crate::state::State<D, W> for $enum where $crate::app::Data<D, W>: $($trait +)+ Sized {
+                fn handle_event(self, app: &mut $crate::app::Data<D, W>, event: Event) -> $crate::state::Action<$enum> {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_event(app, event $(, $arg)*),)+
                     }
                 }
 
-                fn handle_tick(self, app: &mut $crate::app::Data<D>) {
+                fn handle_tick(self, app: &mut $crate::app::Data<D, W>) {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_tick(app $(, $arg)*),)+
                     }
                 }
 
-                fn handle_render(self, app: &$crate::app::Data<D>) {
+                fn handle_render(self, app: &$crate::app::Data<D, W>) {
                     match self {
                         $($enum::$name($($arg),*) => $trait::handle_render(app $(, $arg)*),)+
                     }

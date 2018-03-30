@@ -5,30 +5,25 @@
 #[macro_use] extern crate vulkano_shader_derive;
 extern crate vulkano_win;
 
+use std::{ptr, mem};
 use std::sync::Arc;
-use std::cell::UnsafeCell;
-use std::ptr;
-use std::time::Duration;
+use std::cell::{Cell, UnsafeCell};
 
-use stateloop::app::{App, Data, Event, Window};
+use stateloop::app::{App, Data, Event, Window, WindowBuilder};
 use stateloop::state::Action;
 
+use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState};
+use vulkano::device::{Device, DeviceExtensions, Queue};
+use vulkano::framebuffer::{Framebuffer, Subpass, FramebufferAbstract, RenderPassAbstract};
 use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::device::{Device, Queue, DeviceExtensions};
-use vulkano::swapchain::{acquire_next_image, Swapchain, SurfaceTransform};
-use vulkano::image::swapchain::SwapchainImage;
-use vulkano::buffer::BufferUsage;
-use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
-use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineParams, GraphicsPipelineAbstract};
-use vulkano::pipeline::vertex::SingleBufferDefinition;
-use vulkano::pipeline::input_assembly::InputAssembly;
-use vulkano::pipeline::viewport::{Scissor, Viewport, ViewportsState};
-use vulkano::pipeline::multisample::Multisample;
-use vulkano::pipeline::depth_stencil::DepthStencil;
-use vulkano::pipeline::blend::Blend;
-use vulkano::framebuffer::{Subpass, Framebuffer, FramebufferAbstract};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferBuilder, DynamicState};
+use vulkano::image::SwapchainImage;
+use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
+use vulkano::pipeline::viewport::Viewport;
+use vulkano::swapchain::{self, PresentMode, SurfaceTransform, Surface, Swapchain,AcquireError, SwapchainCreationError};
 use vulkano::sync::{now, GpuFuture};
+
+use vulkano_win::VkSurfaceBuild;
 
 #[derive(Debug, Clone)]
 struct Vertex {
@@ -47,16 +42,19 @@ states! {
 struct Renderer {
     device: Arc<Device>,
     queue: Arc<Queue>,
-    swapchain: Arc<Swapchain>,
+    swapchain: Arc<Swapchain<Window>>,
+    images: Vec<Arc<SwapchainImage<Window>>>,
 
     vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
     pipeline: Arc<GraphicsPipelineAbstract + Sync + Send>,
-    framebuffers: Vec<Arc<FramebufferAbstract + Sync + Send>>,
+    render_pass: Arc<RenderPassAbstract + Send + Sync>,
+    framebuffers: Option<Vec<Arc<FramebufferAbstract + Sync + Send>>>,
 
     frame_future: UnsafeCell<Box<GpuFuture>>,
+    recreate_swapchain: Cell<bool>
 }
 
-impl MainHandler for Data<Renderer> {
+impl MainHandler for Data<Renderer, Arc<Surface<Window>>> {
     fn handle_event(&mut self, event: Event) -> Action<State> {
         match event {
             Event::Closed => Action::Quit,
@@ -64,10 +62,43 @@ impl MainHandler for Data<Renderer> {
         }
     }
 
-    fn handle_tick(&mut self) {}
+    fn handle_tick(&mut self) {
+        let (w, h) = self.window().window().get_inner_size().unwrap();
+        let renderer = &mut self.data;
+
+        if renderer.recreate_swapchain.get() {
+
+            let (new_swapchain, new_images) = match renderer.swapchain.recreate_with_dimension([w, h]) {
+                Ok(r) => r,
+                Err(SwapchainCreationError::UnsupportedDimensions) => return,
+                Err(err) => panic!("{:?}", err)
+            };
+
+            mem::replace(&mut renderer.swapchain, new_swapchain);
+            mem::replace(&mut renderer.images, new_images);
+
+            renderer.framebuffers = None;
+            renderer.recreate_swapchain.set(false);
+        }
+
+        if renderer.framebuffers.is_none() {
+            let new_framebuffers = Some(renderer.images.iter().map(|image| {
+                Arc::new(Framebuffer::start(renderer.render_pass.clone())
+                     .add(image.clone())
+                     .unwrap()
+                     .build()
+                     .unwrap())
+            })
+                .map(|fb| fb as Arc<FramebufferAbstract + Sync + Send>)
+                .collect::<Vec<_>>());
+
+            mem::replace(&mut renderer.framebuffers, new_framebuffers);
+        }
+    }
 
     fn handle_render(&self) {
-        let renderer = self.data();
+        let (w, h) = self.window().window().get_inner_size().unwrap();
+        let renderer = &self.data;
 
         let mut frame_future = unsafe { 
             let ptr = renderer.frame_future.get();
@@ -75,23 +106,36 @@ impl MainHandler for Data<Renderer> {
         };
 
         frame_future.cleanup_finished();
-        let (image_num, acquire_future) = acquire_next_image(
-            renderer.swapchain.clone(),
-            Duration::new(1, 0)
-        ).unwrap();
 
-        let command_buffer = AutoCommandBufferBuilder::new(renderer.device.clone(), renderer.queue.family())
+        let (image_num, acquire_future) = match swapchain::acquire_next_image(renderer.swapchain.clone(), None) {
+            Ok(r) => r,
+            Err(AcquireError::OutOfDate) => {
+                renderer.recreate_swapchain.set(true);
+                return
+            },
+            Err(err) => panic!("{:?}", err)
+        };
+
+        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(renderer.device.clone(), renderer.queue.family())
             .unwrap()
             .begin_render_pass(
-                renderer.framebuffers[image_num].clone(),
+                renderer.framebuffers.as_ref().unwrap()[image_num].clone(),
                 false,
                 vec![[1.0, 0.0, 1.0, 1.0].into()]
             )
             .unwrap()
             .draw(
                 renderer.pipeline.clone(),
-                DynamicState::none(),
-                vec![renderer.vertex_buffer.clone()], 
+                DynamicState {
+                    line_width: None,
+                    viewports: Some(vec![Viewport {
+                          origin: [0.0, 0.0],
+                          dimensions: [w as f32, h as f32],
+                          depth_range: 0.0 .. 1.0,
+                    }]),
+                    scissors: None
+                },
+                vec![renderer.vertex_buffer.clone()],
                 (), ()
             )
             .unwrap()
@@ -122,7 +166,7 @@ impl MainHandler for Data<Renderer> {
     }
 }
 
-impl TestHandler for Data<Renderer> {
+impl TestHandler for Data<Renderer, Arc<Surface<Window>>> {
     fn handle_event(&mut self, _: Event, _: usize) -> Action<State> {
         Action::Done(State::Main())
     }
@@ -133,7 +177,7 @@ impl TestHandler for Data<Renderer> {
     }
 }
 
-fn init_vulkan(instance: Arc<Instance>, window: &Window) -> Renderer {
+fn init_vulkan(instance: Arc<Instance>, window: &Arc<Surface<Window>>) -> Renderer {
     // Select physical device
     let physical = PhysicalDevice::enumerate(&instance)
         .next()
@@ -143,7 +187,7 @@ fn init_vulkan(instance: Arc<Instance>, window: &Window) -> Renderer {
 
     // Choose gpu queue
     let queue = physical.queue_families().find(|&queue| {
-        queue.supports_graphics() && window.surface().is_supported(queue).unwrap_or(false)
+        queue.supports_graphics() && window.is_supported(queue).unwrap_or(false)
     })
         .expect("No queue family found");
 
@@ -155,7 +199,7 @@ fn init_vulkan(instance: Arc<Instance>, window: &Window) -> Renderer {
         };
 
         Device::new(
-            &physical, 
+            physical, 
             physical.supported_features(), 
             &device_ext,
             [(queue, 0.5)].iter().cloned()
@@ -165,28 +209,28 @@ fn init_vulkan(instance: Arc<Instance>, window: &Window) -> Renderer {
 
     let queue = queues.next().unwrap();
 
+    let (w, h) = window.window().get_inner_size().unwrap();
+
     // Create swapchain
     let (swapchain, images) = {
-        let caps = window.surface().capabilities(physical)
+        let caps = window.capabilities(physical)
             .expect("Failed to get surface capabilities");
 
-        let dimensions = caps.current_extent.unwrap_or([500, 500]);
-        let present = caps.present_modes.iter().next().unwrap();
         let alpha = caps.supported_composite_alpha.iter().next().unwrap();
         let format = caps.supported_formats[0].0;
 
         Swapchain::new(
             device.clone(), 
-            window.surface().clone(),
+            window.clone(),
             caps.min_image_count,
             format,
-            dimensions,
+            [w, h],
             1,
             caps.supported_usage_flags,
             &queue,
             SurfaceTransform::Identity,
             alpha,
-            present,
+            PresentMode::Fifo,
             true,
             None
         )
@@ -198,7 +242,6 @@ fn init_vulkan(instance: Arc<Instance>, window: &Window) -> Renderer {
         CpuAccessibleBuffer::from_iter(
             device.clone(),
             BufferUsage::vertex_buffer(),
-            Some(queue.family()),
             [
                 Vertex { position: [-0.5, -0.25] },
                 Vertex { position: [0.0, 0.5] },
@@ -231,8 +274,8 @@ void main() {
         struct Dummy;
     }
 
-    let vs = vs::Shader::load(&device).expect("failed to create shader module");
-    let fs = fs::Shader::load(&device).expect("failed to create shader module");
+    let vs = vs::Shader::load(device.clone()).expect("failed to create shader module");
+    let fs = fs::Shader::load(device.clone()).expect("failed to create shader module");
 
     // Create render pass
     let render_pass = Arc::new(single_pass_renderpass!(
@@ -252,51 +295,38 @@ void main() {
     ).unwrap());
 
     // Create pipeline
-    let pipeline = Arc::new(GraphicsPipeline::new(
-        device.clone(),
-        GraphicsPipelineParams {
-            vertex_input: SingleBufferDefinition::<Vertex>::new(),
-            vertex_shader: vs.main_entry_point(),
-            input_assembly: InputAssembly::triangle_list(),
-            tessellation: None,
-            geometry_shader: None,
-            viewport: ViewportsState::Fixed {
-                data: vec![(
-                    Viewport {
-                        origin: [0.0, 0.0],
-                        depth_range: 0.0 .. 1.0,
-                        dimensions: [images[0].dimensions()[0] as f32,
-                                     images[0].dimensions()[1] as f32],
-                    },
-                    Scissor::irrelevant()
-                )],
-            },
-            raster: Default::default(),
-            multisample: Multisample::disabled(),
-            fragment_shader: fs.main_entry_point(),
-            depth_stencil: DepthStencil::disabled(),
-            blend: Blend::pass_through(),
-            render_pass: Subpass::from(render_pass.clone(), 0).unwrap(),
-        }
-    ).unwrap());
+    let pipeline = Arc::new(GraphicsPipeline::start()
+        .vertex_input_single_buffer::<Vertex>()
+        .vertex_shader(vs.main_entry_point(), ())
+        .triangle_list()
+        .viewports_dynamic_scissors_irrelevant(1)
+        .fragment_shader(fs.main_entry_point(), ())
+        .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
+        .build(device.clone())
+        .unwrap());
 
+    /*
     // Create framebuffers
     let framebuffers = images.iter().map(|image| {
         Arc::new(Framebuffer::start(render_pass.clone())
             .add(image.clone()).unwrap()
             .build().unwrap()) as Arc<FramebufferAbstract + Send + Sync>
     }).collect();
+    */
 
     Renderer {
         device: device.clone(),
         queue: queue,
         swapchain: swapchain,
+        images: images,
 
         vertex_buffer: vertex_buffer,
         pipeline: pipeline as Arc<GraphicsPipelineAbstract + Send + Sync>,
-        framebuffers: framebuffers,
+        render_pass: render_pass as Arc<RenderPassAbstract + Send + Sync>,
+        framebuffers: None,
 
-        frame_future: UnsafeCell::new(Box::new(now(device.clone())) as Box<GpuFuture>)
+        frame_future: UnsafeCell::new(Box::new(now(device.clone())) as Box<GpuFuture>),
+        recreate_swapchain: Cell::new(false)
     }
 }
 
@@ -308,12 +338,13 @@ fn main() {
             .unwrap()
     };
 
-    App::new(
-        instance.clone(),
+    let i = instance.clone();
 
-        |builder| builder
+    App::new(
+        |event_loop| WindowBuilder::new()
             .with_title("States Test")
-            .with_dimensions(500, 500),
+            .with_dimensions(500, 500)
+            .build_vk_surface(event_loop, i),
 
         |window| init_vulkan(instance, window)
     )

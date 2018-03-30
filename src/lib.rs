@@ -16,8 +16,6 @@
 //  limitations under the License.
 //////////////////////////////////////////////////////////////////////////////
 
-extern crate vulkano;
-extern crate vulkano_win;
 extern crate winit;
 
 pub mod app;

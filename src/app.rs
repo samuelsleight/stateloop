@@ -17,50 +17,33 @@
 //////////////////////////////////////////////////////////////////////////////
 
 use std::time::{Duration, Instant};
-use std::sync::Arc;
 use std::thread::sleep;
-
-use vulkano::instance::Instance;
-use vulkano_win::VkSurfaceBuild;
-use winit::EventsLoop;
 
 use winit::Event as WinitEvent;
 
-pub use vulkano::instance::InstanceCreationError;
-pub use vulkano_win::{Window, CreationError};
-pub use winit::WindowBuilder;
-
+pub use winit::{EventsLoop, Window, WindowBuilder};
 pub use winit::WindowEvent as Event;
 
 use state::{Action, State};
 
-pub struct App<D> {
+pub struct App<D, W> {
     event_loop: EventsLoop,
-    data: Data<D>
+    data: Data<D, W>
 }
 
-pub struct Data<D> {
-    window: Window,
-    data: D
+pub struct Data<D, W> {
+    window: W,
+    pub data: D
 }
 
-#[derive(Debug)]
-pub enum Error {
-    WindowCreation(CreationError),
-    InstanceCreation(InstanceCreationError)
-}
-
-impl<D> App<D> {
-    pub fn new<WindowInit, DataInit>(instance: Arc<Instance>, f: WindowInit, g: DataInit) -> Result<App<D>, Error>
+impl<D, W> App<D, W> {
+    pub fn new<WindowInit, DataInit, E>(f: WindowInit, g: DataInit) -> Result<App<D, W>, E>
         where 
-            WindowInit: FnOnce(WindowBuilder) -> WindowBuilder,
-            DataInit: FnOnce(&Window) -> D {
+            WindowInit: FnOnce(&EventsLoop) -> Result<W, E>,
+            DataInit: FnOnce(&W) -> D {
 
         let event_loop = EventsLoop::new();
-        let window = f(WindowBuilder::new())
-            .build_vk_surface(&event_loop, instance)
-            .map_err(Error::WindowCreation)?;
-
+        let window = f(&event_loop)?;
         let data = g(&window);
 
         Ok(App {
@@ -72,24 +55,24 @@ impl<D> App<D> {
         })
     }
 
-    fn handle_events<S: State<D>>(&mut self, mut state: S) -> Option<S> {
+    fn handle_events<S: State<D, W>>(&mut self, mut state: S) -> Option<S> {
         let mut quit = false;
 
-        let event_loop = &self.event_loop;
+        let event_loop = &mut self.event_loop;
         let data = &mut self.data;
 
         event_loop.poll_events(|e| {
-            let WinitEvent::WindowEvent {
+            if let WinitEvent::WindowEvent {
                 window_id: _,
                 event,
-            } = e;
-
-            state = match state.handle_event(data, event) {
-                Action::Continue => state,
-                Action::Done(state) => state,
-                Action::Quit => {
-                    quit = true;
-                    state
+            } = e {
+                state = match state.handle_event(data, event) {
+                    Action::Continue => state,
+                    Action::Done(state) => state,
+                    Action::Quit => {
+                        quit = true;
+                        state
+                    }
                 }
             }
         });
@@ -101,7 +84,7 @@ impl<D> App<D> {
         }
     }
 
-    pub fn run<S: State<D>>(&mut self, fps: u32, mut state: S) {
+    pub fn run<S: State<D, W>>(&mut self, fps: u32, mut state: S) {
         let mut accum = Duration::from_millis(0);
         let mut prev = Instant::now();
 
@@ -125,22 +108,14 @@ impl<D> App<D> {
         }
     }
 
-    pub fn data(&self) -> &Data<D> {
+    pub fn data(&self) -> &Data<D, W> {
         &self.data
     }
 
 }
 
-impl<D> Data<D> {
-    pub fn data(&self) -> &D {
-        &self.data
-    }
-
-    pub fn data_mut(&mut self) -> &mut D {
-        &mut self.data
-    }
-
-    pub fn window(&self) -> &Window {
+impl<D, W> Data<D, W> {
+    pub fn window(&self) -> &W {
         &self.window
     }
 }

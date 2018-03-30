@@ -1,10 +1,10 @@
 [package]
 name = "app"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Samuel Sleight <samuel.sleight@gmail.com>"]
 
 [dependencies]
 stateloop = { path = ".." }
-vulkano = { git = "https://github.com/tomaka/vulkano" }
-vulkano-win = { git = "https://github.com/tomaka/vulkano" }
-vulkano-shader-derive = { git = "https://github.com/tomaka/vulkano" }
+vulkano = "0.9.0"
+vulkano-win = "0.9.0"
+vulkano-shader-derive = "0.9.0"
