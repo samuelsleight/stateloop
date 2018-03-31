@@ -107,11 +107,6 @@ impl<D, W> App<D, W> {
             sleep(spf - accum);
         }
     }
-
-    pub fn data(&self) -> &Data<D, W> {
-        &self.data
-    }
-
 }
 
 impl<D, W> Data<D, W> {

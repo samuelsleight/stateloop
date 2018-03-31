@@ -16,7 +16,7 @@
 //  limitations under the License.
 //////////////////////////////////////////////////////////////////////////////
 
-extern crate winit;
+pub extern crate winit;
 
 pub mod app;
 pub mod state;
