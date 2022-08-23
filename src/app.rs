@@ -16,42 +16,45 @@
 //  limitations under the License.
 //////////////////////////////////////////////////////////////////////////////
 
-use std::time::{Duration, Instant};
 use std::thread::sleep;
+use std::time::{Duration, Instant};
 
-use winit::Event as WinitEvent;
+use winit::platform::run_return::EventLoopExtRunReturn;
 
-pub use winit::{EventsLoop, Window, WindowBuilder};
-pub use winit::WindowEvent as Event;
+pub use winit::{
+    event::WindowEvent as Event,
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
+};
 
-use state::{Action, State};
+use crate::state::{Action, State};
 
 pub struct App<D, W> {
-    event_loop: EventsLoop,
-    data: Data<D, W>
+    event_loop: EventLoop<()>,
+    data: Data<D, W>,
 }
 
 pub struct Data<D, W> {
     window: W,
-    pub data: D
+    pub data: D,
 }
 
 impl<D, W> App<D, W> {
     pub fn new<WindowInit, DataInit, E>(f: WindowInit, g: DataInit) -> Result<App<D, W>, E>
-        where 
-            WindowInit: FnOnce(&EventsLoop) -> Result<W, E>,
-            DataInit: FnOnce(&W) -> D {
-
-        let event_loop = EventsLoop::new();
+    where
+        WindowInit: FnOnce(&EventLoop<()>) -> Result<W, E>,
+        DataInit: FnOnce(&W) -> D,
+    {
+        let event_loop = EventLoop::new();
         let window = f(&event_loop)?;
         let data = g(&window);
 
         Ok(App {
-            event_loop: event_loop,
+            event_loop,
             data: Data {
-                window: window,
-                data: data
-            }
+                window,
+                data,
+            },
         })
     }
 
@@ -61,11 +64,12 @@ impl<D, W> App<D, W> {
         let event_loop = &mut self.event_loop;
         let data = &mut self.data;
 
-        event_loop.poll_events(|e| {
-            if let WinitEvent::WindowEvent {
+        event_loop.run_return(|event, _, _| {
+            if let winit::event::Event::WindowEvent {
                 window_id: _,
                 event,
-            } = e {
+            } = event
+            {
                 state = match state.handle_event(data, event) {
                     Action::Continue => state,
                     Action::Done(state) => state,
@@ -114,4 +118,3 @@ impl<D, W> Data<D, W> {
         &self.window
     }
 }
-
