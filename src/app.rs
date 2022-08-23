@@ -19,6 +19,7 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use winit::event_loop::ControlFlow;
 use winit::platform::run_return::EventLoopExtRunReturn;
 
 pub use winit::{
@@ -64,7 +65,9 @@ impl<D, W> App<D, W> {
         let event_loop = &mut self.event_loop;
         let data = &mut self.data;
 
-        event_loop.run_return(|event, _, _| {
+        event_loop.run_return(|event, _, flow| {
+            *flow = ControlFlow::Exit;
+
             if let winit::event::Event::WindowEvent {
                 window_id: _,
                 event,
