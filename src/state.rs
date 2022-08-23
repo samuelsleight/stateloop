@@ -16,7 +16,7 @@
 //  limitations under the License.
 //////////////////////////////////////////////////////////////////////////////
 
-use app::{Data, Event};
+use crate::app::{Data, Event};
 
 #[derive(Copy, Clone)]
 pub enum Action<S> {
@@ -25,7 +25,7 @@ pub enum Action<S> {
     Quit,
 }
 
-pub trait State<D, W> : Copy {
+pub trait State<D, W>: Copy {
     fn handle_event(self, app: &mut Data<D, W>, event: Event) -> Action<Self>;
     fn handle_tick(self, app: &mut Data<D, W>);
     fn handle_render(self, app: &Data<D, W>);
@@ -75,4 +75,3 @@ macro_rules! states {
 
     (as_item $t:item) => { $t }
 }
-
