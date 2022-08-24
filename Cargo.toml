@@ -4,7 +4,7 @@ description = "Simple state-based main loop for doing stuff with a winit window"
 license = "Apache-2.0"
 name = "stateloop"
 repository = "https://github.com/samuelsleight/stateloop"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 
 [dependencies]
