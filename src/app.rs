@@ -28,6 +28,7 @@ pub use winit::{
     window::{Window, WindowBuilder},
 };
 
+use crate::error::{AppError, MaybeResult};
 use crate::state::{Action, State};
 
 pub struct App<D, W> {
@@ -41,14 +42,19 @@ pub struct Data<D, W> {
 }
 
 impl<D, W> App<D, W> {
-    pub fn new<WindowInit, DataInit, E>(f: WindowInit, g: DataInit) -> Result<App<D, W>, E>
+    pub fn new<WindowInit, DataInit, R1, R2>(
+        f: WindowInit,
+        g: DataInit,
+    ) -> Result<App<D, W>, AppError<R1::Error, R2::Error>>
     where
-        WindowInit: FnOnce(&EventLoop<()>) -> Result<W, E>,
-        DataInit: FnOnce(&W) -> D,
+        R1: MaybeResult<W>,
+        R2: MaybeResult<D>,
+        WindowInit: FnOnce(&EventLoop<()>) -> R1,
+        DataInit: FnOnce(&W) -> R2,
     {
         let event_loop = EventLoop::new();
-        let window = f(&event_loop)?;
-        let data = g(&window);
+        let window = f(&event_loop).as_result().map_err(AppError::WindowError)?;
+        let data = g(&window).as_result().map_err(AppError::DataError)?;
 
         Ok(App {
             event_loop,
