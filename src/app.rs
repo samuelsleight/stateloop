@@ -52,10 +52,7 @@ impl<D, W> App<D, W> {
 
         Ok(App {
             event_loop,
-            data: Data {
-                window,
-                data,
-            },
+            data: Data { window, data },
         })
     }
 

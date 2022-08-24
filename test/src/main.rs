@@ -29,8 +29,7 @@ use vulkano::{
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
     single_pass_renderpass,
     swapchain::{
-        self, AcquireError, PresentMode, Surface, SurfaceCreationError, SurfaceTransform,
-        Swapchain, SwapchainCreateInfo, SwapchainCreationError,
+        self, AcquireError, Surface, Swapchain, SwapchainCreateInfo, SwapchainCreationError,
     },
     sync::{now, FlushError, GpuFuture},
 };
@@ -146,6 +145,10 @@ impl MainHandler for Data<Renderer, Arc<Surface<Window>>> {
                     }
                     Err(err) => panic!("{:?}", err),
                 };
+
+            if suboptimal {
+                renderer.recreate_swapchain = true;
+            }
 
             let mut builder = AutoCommandBufferBuilder::primary(
                 renderer.device.clone(),
@@ -265,7 +268,7 @@ fn init_vulkan(instance: Arc<Instance>, window: &Arc<Surface<Window>>) -> Render
     let queue = queues.next().unwrap();
 
     // Create swapchain
-    let (mut swapchain, images) = {
+    let (swapchain, images) = {
         let surface_capabilities = physical_device
             .surface_capabilities(&window, Default::default())
             .expect("Failed to get surface capabilities");
